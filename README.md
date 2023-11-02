@@ -15,7 +15,10 @@ Video-subtitle-remover (VSR) 是一款基于AI技术，将视频中的硬字幕�
 
 <p style="text-align:center;"><img src="https://github.com/YaoFANGUK/video-subtitle-remover/raw/main/design/demo.png" alt="demo.png"/></p>
 
-> 直接下载压缩包解压运行，如果不能运行再按照下面的教程，尝试源码安装conda环境运行
+**使用说明：**
+
+ - 有使用问题请加群讨论，QQ群：806152575
+ - 直接下载压缩包解压运行，如果不能运行再按照下面的教程，尝试源码安装conda环境运行
 
 **下载地址：**
 
