@@ -1,5 +1,7 @@
+import shutil
 import subprocess
 import os
+import traceback
 from pathlib import Path
 import threading
 import cv2
@@ -133,6 +135,8 @@ class SubtitleRemover:
         self.isFinished = False
         # 预览帧
         self.preview_frame = None
+        # 是否将原音频嵌入到去除字幕后的视频
+        self.is_successful_merged = False
 
     @staticmethod
     def get_coordinates(dt_box):
@@ -218,28 +222,44 @@ class SubtitleRemover:
 
     def merge_audio_to_video(self):
         # 创建音频临时对象，windows下delete=True会有permission denied的报错
-        temp = tempfile.NamedTemporaryFile(suffix='.aac', delete=False)
+        temp = tempfile.NamedTemporaryFile(suffix='.flac', delete=False)
         audio_extract_command = [config.FFMPEG_PATH,
                                  "-y", "-i", self.video_path,
                                  "-acodec", "copy",
                                  "-vn", "-loglevel", "error", temp.name]
         use_shell = True if os.name == "nt" else False
-        subprocess.check_output(audio_extract_command, stdin=open(os.devnull), shell=use_shell)
-        if os.path.exists(self.video_temp_file.name):
-            audio_merge_command = [config.FFMPEG_PATH,
-                                   "-y", "-i", self.video_temp_file.name,
-                                   "-i", temp.name,
-                                   "-vcodec", "copy",
-                                   "-acodec", "copy",
-                                   "-loglevel", "error", self.video_out_name]
-            subprocess.check_output(audio_merge_command, stdin=open(os.devnull), shell=use_shell)
-        temp.close()
-        self.video_temp_file.close()
-        if os.path.exists(temp.name):
-            try:
-                os.remove(temp.name)
-            except Exception:
-                print(f'failed to delete temp file {temp.name}')
+        try:
+            subprocess.check_output(audio_extract_command, stdin=open(os.devnull), shell=use_shell)
+        except Exception:
+            print('fail to extract audio')
+            return
+        else:
+            if os.path.exists(self.video_temp_file.name):
+                audio_merge_command = [config.FFMPEG_PATH,
+                                       "-y", "-i", self.video_temp_file.name,
+                                       "-i", temp.name,
+                                       "-vcodec", "copy",
+                                       "-acodec", "copy",
+                                       "-loglevel", "error", self.video_out_name]
+                try:
+                    subprocess.check_output(audio_merge_command, stdin=open(os.devnull), shell=use_shell)
+                except Exception:
+                    print('fail to merge audio')
+                    return
+            if os.path.exists(temp.name):
+                try:
+                    os.remove(temp.name)
+                except Exception:
+                    print(f'failed to delete temp file {temp.name}')
+            self.is_successful_merged = True
+        finally:
+            temp.close()
+            if not self.is_successful_merged:
+                try:
+                    shutil.copy2(self.video_temp_file.name, self.video_out_name)
+                except IOError as e:
+                    print("Unable to copy file. %s" % e)
+            self.video_temp_file.close()
 
 
 if __name__ == '__main__':
