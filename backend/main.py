@@ -1,7 +1,6 @@
 import shutil
 import subprocess
 import os
-import traceback
 from pathlib import Path
 import threading
 import cv2
@@ -15,7 +14,6 @@ import numpy as np
 import tempfile
 import torch
 import time
-from paddle import fluid
 from tqdm import tqdm
 from tools.infer import utility
 from tools.infer.predict_det import TextDetector
@@ -106,6 +104,11 @@ class SubtitleRemover:
         self.lock = threading.RLock()
         # 用户指定的字幕区域位置
         self.sub_area = sub_area
+        # 判断是否为图片
+        self.is_picture = False
+        if str(vd_path).endswith(('.bmp', '.dib', '.png', '.jpg', '.jpeg', '.pbm', '.pgm', '.ppm', '.tif', '.tiff')):
+            self.sub_area = None
+            self.is_picture = True
         # 视频路径
         self.video_path = vd_path
         self.video_cap = cv2.VideoCapture(vd_path)
@@ -126,7 +129,11 @@ class SubtitleRemover:
         # 创建视频写对象
         self.video_writer = cv2.VideoWriter(self.video_temp_file.name, cv2.VideoWriter_fourcc(*'mp4v'), self.fps, self.size)
         self.video_out_name = os.path.join(os.path.dirname(self.video_path), f'{self.vd_name}_no_sub.mp4')
-        fluid.install_check.run_check()
+        if self.is_picture:
+            ext = os.path.splitext(vd_path)[-1]
+            if not os.path.exists(os.path.join(os.path.dirname(self.video_path), 'no_sub')):
+                os.makedirs(os.path.join(os.path.dirname(self.video_path), 'no_sub'))
+            self.video_out_name = os.path.join(os.path.dirname(self.video_path), 'no_sub', f'{self.vd_name}{ext}')
         if torch.cuda.is_available():
             print('use GPU for acceleration')
         # 总处理进度
@@ -179,15 +186,21 @@ class SubtitleRemover:
                 masks = self.create_mask(frame, sub_list[index])
                 frame = self.inpaint_frame(frame, masks)
             self.preview_frame = cv2.hconcat([original_frame, frame])
-            self.video_writer.write(frame)
+            if self.is_picture:
+                cv2.imwrite(self.video_out_name, frame)
+            else:
+                self.video_writer.write(frame)
             tbar.update(1)
             self.progress_remover = 100 * float(index) / float(self.frame_count) // 2
             self.progress_total = 50 + self.progress_remover
         self.video_cap.release()
         self.video_writer.release()
-        # 将原音频合并到新生成的视频文件中
-        self.merge_audio_to_video()
-        print(f"[Finished]Subtitle successfully removed, video generated at：{self.video_out_name}")
+        if not self.is_picture:
+            # 将原音频合并到新生成的视频文件中
+            self.merge_audio_to_video()
+            print(f"[Finished]Subtitle successfully removed, video generated at：{self.video_out_name}")
+        else:
+            print(f"[Finished]Subtitle successfully removed, picture generated at：{self.video_out_name}")
         print(f'time cost: {round(time.time() - start_time, 2)}s')
         self.isFinished = True
         if os.path.exists(self.video_temp_file.name):
