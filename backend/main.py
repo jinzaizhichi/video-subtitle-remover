@@ -235,7 +235,7 @@ class SubtitleRemover:
 
     def merge_audio_to_video(self):
         # 创建音频临时对象，windows下delete=True会有permission denied的报错
-        temp = tempfile.NamedTemporaryFile(suffix='.flac', delete=False)
+        temp = tempfile.NamedTemporaryFile(suffix='.aac', delete=False)
         audio_extract_command = [config.FFMPEG_PATH,
                                  "-y", "-i", self.video_path,
                                  "-acodec", "copy",
