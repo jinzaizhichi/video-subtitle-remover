@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 import importlib
+import platform
 import numpy as np
 import tempfile
 import torch
@@ -129,11 +130,12 @@ class SubtitleRemover:
         # 创建视频写对象
         self.video_writer = cv2.VideoWriter(self.video_temp_file.name, cv2.VideoWriter_fourcc(*'mp4v'), self.fps, self.size)
         self.video_out_name = os.path.join(os.path.dirname(self.video_path), f'{self.vd_name}_no_sub.mp4')
+        self.ext = os.path.splitext(vd_path)[-1]
         if self.is_picture:
-            ext = os.path.splitext(vd_path)[-1]
-            if not os.path.exists(os.path.join(os.path.dirname(self.video_path), 'no_sub')):
-                os.makedirs(os.path.join(os.path.dirname(self.video_path), 'no_sub'))
-            self.video_out_name = os.path.join(os.path.dirname(self.video_path), 'no_sub', f'{self.vd_name}{ext}')
+            pic_dir = os.path.join(os.path.dirname(self.video_path), 'no_sub')
+            if not os.path.exists(pic_dir):
+                os.makedirs(pic_dir)
+            self.video_out_name = os.path.join(pic_dir, f'{self.vd_name}{self.ext}')
         if torch.cuda.is_available():
             print('use GPU for acceleration')
         # 总处理进度
@@ -187,7 +189,7 @@ class SubtitleRemover:
                 frame = self.inpaint_frame(frame, masks)
             self.preview_frame = cv2.hconcat([original_frame, frame])
             if self.is_picture:
-                cv2.imwrite(self.video_out_name, frame)
+                cv2.imencode(self.ext, frame)[1].tofile(self.video_out_name)
             else:
                 self.video_writer.write(frame)
             tbar.update(1)
@@ -207,7 +209,10 @@ class SubtitleRemover:
             try:
                 os.remove(self.video_temp_file.name)
             except Exception:
-                print(f'failed to delete temp file {self.video_temp_file.name}')
+                if platform.system() in ['Windows']:
+                    pass
+                else:
+                    print(f'failed to delete temp file {self.video_temp_file.name}')
 
     @staticmethod
     def inpaint(img, mask):
