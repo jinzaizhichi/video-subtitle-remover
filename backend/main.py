@@ -97,6 +97,30 @@ class SubtitleDetect:
         print('[Finished] Finished finding subtitles...')
         return subtitle_frame_no_list
 
+    @staticmethod
+    def get_continuous_frame_no(subtitle_frame_no_box_list):
+        sub_frame_no_list = list(subtitle_frame_no_box_list.keys())
+        sub_frame_no_list_continuous = list()
+        is_finding_start = True
+        is_finding_end = False
+        start_frame_no = sub_frame_no_list[0]
+        for i, item in enumerate(sub_frame_no_list):
+            if is_finding_start:
+                start_frame_no = item
+                is_finding_start = False
+                is_finding_end = True
+            if i + 1 < len(sub_frame_no_list) and item + 1 != sub_frame_no_list[i + 1]:
+                if is_finding_end:
+                    end_frame_no = item
+                    is_finding_end = False
+                    is_finding_start = True
+                    sub_frame_no_list_continuous.append((start_frame_no, end_frame_no))
+                continue
+            if i + 1 == len(sub_frame_no_list):
+                end_frame_no = item
+                sub_frame_no_list_continuous.append((start_frame_no, end_frame_no))
+        return sub_frame_no_list_continuous
+
 
 class SubtitleRemover:
     def __init__(self, vd_path, sub_area=None):

@@ -357,9 +357,9 @@ $RECYCLE.BIN/
 /backend/test.py
 /dylib/
 /settings.ini
-/test.py
-/test2.py
+/test*.py
 /subtitle.ini
 *_no_sub.mp4
 /backend/ffmpeg/win_x64/ffmpeg.exe
 /test/pic_test/
+/test/test2.mp4
