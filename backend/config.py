@@ -18,6 +18,9 @@ DET_MODEL_BASE = os.path.join(BASE_DIR, 'models')
 DET_MODEL_PATH = os.path.join(DET_MODEL_BASE, MODEL_VERSION, 'ch_det')
 # 字幕区域偏移量
 SUBTITLE_AREA_DEVIATION_PIXEL = 50
+# 20个像素点以内的差距认为是同一行
+TOLERANCE_Y = 20
+
 
 # 查看该路径下是否有模型完整文件，没有的话合并小文件生成完整文件
 if 'best.ckpt' not in (os.listdir(os.path.join(LAMA_MODEL_PATH, 'models'))):
