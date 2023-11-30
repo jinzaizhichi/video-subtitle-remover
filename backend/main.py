@@ -151,8 +151,12 @@ class SubtitleDetect:
         if intersection.is_empty:
             return -1
         else:
-            overflow_area_rate = ((box1_polygon.area + box2_polygon.area - intersection.area) / box1_polygon.area) - 1
-            return overflow_area_rate
+            union_area = (box1_polygon.area + box2_polygon.area - intersection.area)
+            if union_area > 0:
+                intersection_area_rate = intersection.area / union_area
+            else:
+                intersection_area_rate = 0
+            return intersection_area_rate
 
     def get_area_max_box_dict(self, sub_frame_no_list_continuous, subtitle_frame_no_box_dict):
         _area_max_box_dict = dict()
