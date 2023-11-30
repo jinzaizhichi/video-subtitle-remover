@@ -98,7 +98,9 @@ class SubtitleDetect:
         subtitle_frame_no_box_dict = self.get_subtitle_frame_no_box_dict_with_united_coordinates(subtitle_frame_no_box_dict)
         if sub_remover is not None:
             try:
-                subtitle_frame_no_box_dict = self.filter_mistake_sub_area(subtitle_frame_no_box_dict, sub_remover.fps)
+                # 当帧数大于1时，说明并非图片或单帧
+                if sub_remover.frame_count > 1:
+                    subtitle_frame_no_box_dict = self.filter_mistake_sub_area(subtitle_frame_no_box_dict, sub_remover.fps)
             except Exception:
                 pass
         print('[Finished] Finished finding subtitles...')
@@ -400,8 +402,6 @@ class SubtitleRemover:
                     pass
                 else:
                     print(f'failed to delete temp file {self.video_temp_file.name}')
-
-
 
     @staticmethod
     def inpaint(img, mask):
