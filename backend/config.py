@@ -20,6 +20,8 @@ DET_MODEL_PATH = os.path.join(DET_MODEL_BASE, MODEL_VERSION, 'ch_det')
 SUBTITLE_AREA_DEVIATION_PIXEL = 50
 # 20个像素点以内的差距认为是同一行
 TOLERANCE_Y = 20
+# 高度查阈值
+THRESHOLD_HEIGHT_DIFFERENCE = 20
 
 
 # 查看该路径下是否有模型完整文件，没有的话合并小文件生成完整文件

@@ -186,7 +186,9 @@ class SubtitleDetect:
                                 if self.compute_iou((xmin, xmax, ymin, ymax), (
                                         area_max_box['xmin'], area_max_box['xmax'], area_max_box['ymin'],
                                         area_max_box['ymax'])) != -1:
-                                    has_same_position = True
+                                    # 如果高度差异不一样
+                                    if abs(abs(area_max_box['ymax'] - area_max_box['ymin']) - abs(ymax - ymin)) < config.THRESHOLD_HEIGHT_DIFFERENCE:
+                                        has_same_position = True
                                     # 如果在同一行，则计算当前面积是不是最大
                                     # 判断面积大小，若当前面积更大，则将当前行的最大区域坐标点更新
                                     if has_same_position and current_area > area_max_box['area']:
@@ -216,6 +218,9 @@ class SubtitleDetect:
         return _area_max_box_dict
 
     def get_subtitle_frame_no_box_dict_with_united_coordinates(self, subtitle_frame_no_box_dict):
+        """
+        将多个视频帧的文本区域坐标统一
+        """
         subtitle_frame_no_box_dict_with_united_coordinates = dict()
         frame_no_list = self.get_continuous_frame_no(subtitle_frame_no_box_dict)
         area_max_box_dict = self.get_area_max_box_dict(frame_no_list, subtitle_frame_no_box_dict)
