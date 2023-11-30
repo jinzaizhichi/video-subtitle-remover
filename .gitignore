@@ -372,3 +372,5 @@ $RECYCLE.BIN/
 /test/demo4.mp4
 /c.py
 /d.py
+demo*.mp4
+test*.py
