@@ -103,6 +103,7 @@ class SubtitleDetect:
                     subtitle_frame_no_box_dict = self.filter_mistake_sub_area(subtitle_frame_no_box_dict, sub_remover.fps)
             except Exception:
                 pass
+        subtitle_frame_no_box_dict = self.prevent_missed_detection(subtitle_frame_no_box_dict)
         print('[Finished] Finished finding subtitles...')
         return subtitle_frame_no_box_dict
 
@@ -253,6 +254,24 @@ class SubtitleDetect:
                 if current_no > end_no:
                     break
         return subtitle_frame_no_box_dict_with_united_coordinates
+
+    def prevent_missed_detection(self, subtitle_frame_no_box_dict):
+        """
+        添加额外的文本框，防止露漏检
+        """
+        frame_no_list = self.get_continuous_frame_no(subtitle_frame_no_box_dict)
+        for start_no, end_no in frame_no_list:
+            current_no = start_no
+            while True:
+                current_box_list = subtitle_frame_no_box_dict[current_no]
+                if current_no + 1 != end_no and (current_no + 1) in subtitle_frame_no_box_dict.keys():
+                    next_box_list = subtitle_frame_no_box_dict[current_no + 1]
+                    if set(current_box_list).issubset(set(next_box_list)):
+                        subtitle_frame_no_box_dict[current_no] = subtitle_frame_no_box_dict[current_no + 1]
+                current_no += 1
+                if current_no > end_no:
+                    break
+        return subtitle_frame_no_box_dict
 
     @staticmethod
     def get_frequency_in_range(sub_frame_no_list_continuous, subtitle_frame_no_box_dict):
