@@ -23,7 +23,7 @@ def merge_video(video_input_path1, video_input_path2, video_output_path):
 
 if __name__ == '__main__':
     v1_path = '../../test/test1_no_sub.mp4'
-    v2_path = '../../test/test1_no_sub(bak).mp4'
+    v2_path = '../../test/test1_no_sub(bak2).mp4'
     video_out_path = '../../test/demo.mp4'
     merge_video(v1_path, v2_path, video_out_path)
     # ffmpeg 命令 mp4转gif
