@@ -33,6 +33,8 @@ MAX_INPAINT_NUM = 5
 MAX_LOAD_NUM = 20
 # 最大同时线程数量
 MAX_WORKER = 4
+# 是否开启快速模式
+FAST_MODE = False
 
 
 # 查看该路径下是否有模型完整文件，没有的话合并小文件生成完整文件

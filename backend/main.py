@@ -472,7 +472,10 @@ class SubtitleRemover:
             index += 1
             if index in sub_list.keys():
                 mask = create_mask(frame, sub_list[index])
-                frame = inpaint(frame, mask)
+                if config.FAST_MODE:
+                    frame = cv2.inpaint(frame, mask, 3, cv2.INPAINT_TELEA)
+                else:
+                    frame = inpaint(frame, mask)
             self.preview_frame = cv2.hconcat([original_frame, frame])
             if self.is_picture:
                 cv2.imencode(self.ext, frame)[1].tofile(self.video_out_name)
