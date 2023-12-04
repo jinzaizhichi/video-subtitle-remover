@@ -1,11 +1,14 @@
 import warnings
 warnings.filterwarnings("ignore")
+warnings.simplefilter("ignore", DeprecationWarning)
 import os
 import torch
 import logging
 import platform
 import stat
 from fsplit.filesplit import Filesplit
+import paddle
+paddle.disable_signal_handler()
 
 logging.disable(logging.DEBUG)  # 关闭DEBUG日志的打印
 logging.disable(logging.WARNING)  # 关闭WARNING日志的打印
@@ -22,6 +25,12 @@ SUBTITLE_AREA_DEVIATION_PIXEL = 50
 TOLERANCE_Y = 20
 # 高度查阈值
 THRESHOLD_HEIGHT_DIFFERENCE = 20
+# 【根据自己的GPU显存大小设置】最大同时处理的图片数量
+MAX_INPAINT_NUM = 5
+# 【根据自己内存大小设置】
+MAX_LOAD_NUM = 20
+#
+MAX_WORKER = 4
 
 
 # 查看该路径下是否有模型完整文件，没有的话合并小文件生成完整文件

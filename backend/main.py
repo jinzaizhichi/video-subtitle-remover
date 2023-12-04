@@ -1,25 +1,28 @@
 import shutil
 import subprocess
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import threading
 import cv2
 import sys
+import paddle
+from backend.tools.inpaint_tools import parallel_inference, inpaint_video, inference_task, batch_generator, create_mask, \
+    inpaint
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 import importlib
 import platform
-import numpy as np
 import tempfile
 import torch
+import multiprocessing
 from shapely.geometry import Polygon
 import time
 from tqdm import tqdm
 from tools.infer import utility
 from tools.infer.predict_det import TextDetector
-from inpaint.lama_inpaint import inpaint_img_with_lama
 
 
 class SubtitleDetect:
@@ -95,12 +98,14 @@ class SubtitleDetect:
             tbar.update(1)
             if sub_remover:
                 sub_remover.progress_total = (100 * float(current_frame_no) / float(frame_count)) // 2
-        subtitle_frame_no_box_dict = self.get_subtitle_frame_no_box_dict_with_united_coordinates(subtitle_frame_no_box_dict)
+        subtitle_frame_no_box_dict = self.get_subtitle_frame_no_box_dict_with_united_coordinates(
+            subtitle_frame_no_box_dict)
         if sub_remover is not None:
             try:
                 # 当帧数大于1时，说明并非图片或单帧
                 if sub_remover.frame_count > 1:
-                    subtitle_frame_no_box_dict = self.filter_mistake_sub_area(subtitle_frame_no_box_dict, sub_remover.fps)
+                    subtitle_frame_no_box_dict = self.filter_mistake_sub_area(subtitle_frame_no_box_dict,
+                                                                              sub_remover.fps)
             except Exception:
                 pass
         subtitle_frame_no_box_dict = self.prevent_missed_detection(subtitle_frame_no_box_dict)
@@ -192,7 +197,8 @@ class SubtitleDetect:
                                         area_max_box['xmin'], area_max_box['xmax'], area_max_box['ymin'],
                                         area_max_box['ymax'])) != -1:
                                     # 如果高度差异不一样
-                                    if abs(abs(area_max_box['ymax'] - area_max_box['ymin']) - abs(ymax - ymin)) < config.THRESHOLD_HEIGHT_DIFFERENCE:
+                                    if abs(abs(area_max_box['ymax'] - area_max_box['ymin']) - abs(
+                                            ymax - ymin)) < config.THRESHOLD_HEIGHT_DIFFERENCE:
                                         has_same_position = True
                                     # 如果在同一行，则计算当前面积是不是最大
                                     # 判断面积大小，若当前面积更大，则将当前行的最大区域坐标点更新
@@ -385,16 +391,79 @@ class SubtitleRemover:
                 coordinate_list.append((xmin, xmax, ymin, ymax))
         return coordinate_list
 
+    def update_progress(self, tbar, increment, index):
+        tbar.update(increment)
+        self.progress_remover = 100 * float(index) / float(self.frame_count) // 2
+        self.progress_total = 50 + self.progress_remover
+
     def run(self):
+
         # 记录开始时间
         start_time = time.time()
         # 寻找字幕帧
         self.progress_total = 0
         sub_list = self.sub_detector.find_subtitle_frame_no(sub_remover=self)
-        index = 0
         tbar = tqdm(total=int(self.frame_count), unit='frame', position=0, file=sys.__stdout__,
                     desc='Subtitle Removing')
         print('[Processing] start removing subtitles...')
+
+        # *********************** 多线程方案 start ***********************
+        # （1）不加锁的话CUDA线程不安全，生成图片错乱
+        # （1）加锁的话CUDA线程安全，单速度与单线程方案无任何提升
+        # # 待处理视频帧列表
+        # frame_to_inpaint_list = []
+        # # 无需处理的视频帧列表
+        # frame_no_need_inpaint_dict = dict()
+        # index = 0
+        # # # 将需要处理的视频帧读取到内存
+        # while True:
+        #     ret, frame = self.video_cap.read()
+        #     if not ret:
+        #         break
+        #     index += 1
+        #     if index in sub_list.keys():
+        #         frame_to_inpaint_list.append((index, frame, sub_list[index]))
+        #     else:
+        #         frame_no_need_inpaint_dict[index] = frame
+        # # 将数据分批，每批MAX_INPAINT_NUM个样本
+        # batches = [frame_to_inpaint_list[i:i + config.MAX_INPAINT_NUM] for i in range(0, len(frame_to_inpaint_list), config.MAX_INPAINT_NUM)]
+        # # 将分批前的数据删除
+        # # frame_to_inpaint_list.clear()
+        # # 接受批处理结果
+        # inpainted_frame_dict = dict()
+        # # 使用ThreadPoolExecutor处理每个批次
+        # current_max = 0
+        # with ThreadPoolExecutor(max_workers=config.MAX_WORKER) as executor:
+        #     future_to_batch = {executor.submit(inference_task, batch): batch for batch in batches}
+        #     for future in as_completed(future_to_batch):
+        #         batch_result = future.result()
+        #         tbar.update(len(batch_result.keys()))
+        #         if max(batch_result.keys()) > current_max:
+        #             current_max = max(batch_result.keys())
+        #             self.progress_remover = 100 * float(current_max) / float(self.frame_count) // 2
+        #             self.progress_total = 50 + self.progress_remover
+        #         # 预览视频帧
+        #         for index in sorted(batch_result.keys()):
+        #             self.preview_frame = batch_result[index]
+        #         # 将处理后的结果保存到结果字典
+        #         inpainted_frame_dict.update(batch_result)
+        # print(inpainted_frame_dict.keys())
+        #
+        # # 开始写视频
+        # index = 0
+        # while index <= self.frame_count:
+        #     # 读取视频帧
+        #     index += 1
+        #     if index in inpainted_frame_dict.keys():
+        #         self.video_writer.write(inpainted_frame_dict[index])
+        #     elif index in frame_no_need_inpaint_dict.keys():
+        #         self.video_writer.write(frame_no_need_inpaint_dict[index])
+        # self.video_writer.release()
+        # self.video_cap.release()
+        # *********************** 多线程方案 end ***********************
+
+        # *********************** 单线程方案 start ***********************
+        index = 0
         while True:
             ret, frame = self.video_cap.read()
             if not ret:
@@ -402,8 +471,8 @@ class SubtitleRemover:
             original_frame = frame
             index += 1
             if index in sub_list.keys():
-                mask = self.create_mask(frame, sub_list[index])
-                frame = self.inpaint(frame, mask)
+                mask = create_mask(frame, sub_list[index])
+                frame = inpaint(frame, mask)
             self.preview_frame = cv2.hconcat([original_frame, frame])
             if self.is_picture:
                 cv2.imencode(self.ext, frame)[1].tofile(self.video_out_name)
@@ -414,6 +483,8 @@ class SubtitleRemover:
             self.progress_total = 50 + self.progress_remover
         self.video_cap.release()
         self.video_writer.release()
+        # *********************** 单线程方案 end ***********************
+
         if not self.is_picture:
             # 将原音频合并到新生成的视频文件中
             self.merge_audio_to_video()
@@ -422,6 +493,7 @@ class SubtitleRemover:
             print(f"[Finished]Subtitle successfully removed, picture generated at：{self.video_out_name}")
         print(f'time cost: {round(time.time() - start_time, 2)}s')
         self.isFinished = True
+        self.progress_total = 100
         if os.path.exists(self.video_temp_file.name):
             try:
                 os.remove(self.video_temp_file.name)
@@ -430,29 +502,6 @@ class SubtitleRemover:
                     pass
                 else:
                     print(f'failed to delete temp file {self.video_temp_file.name}')
-
-    @staticmethod
-    def inpaint(img, mask):
-        img_inpainted = inpaint_img_with_lama(img, mask, config.LAMA_CONFIG, config.LAMA_MODEL_PATH,
-                                              device=config.device)
-        return img_inpainted
-
-    def inpaint_with_multiple_masks(self, censored_img, mask_list):
-        inpainted_frame = censored_img
-        if mask_list:
-            for mask in mask_list:
-                inpainted_frame = self.inpaint(inpainted_frame, mask)
-        return inpainted_frame
-
-    @staticmethod
-    def create_mask(input_img, coords_list):
-        mask = np.zeros(input_img.shape[0:2], dtype="uint8")
-        if coords_list:
-            for coords in coords_list:
-                xmin, xmax, ymin, ymax = coords
-                # 为了避免框过小，放大10个像素
-                cv2.rectangle(mask, (xmin - 10, ymin - 10), (xmax + 10, ymax + 10), (255, 255, 255), thickness=-1)
-        return mask
 
     def merge_audio_to_video(self):
         # 创建音频临时对象，windows下delete=True会有permission denied的报错
@@ -497,9 +546,9 @@ class SubtitleRemover:
 
 
 if __name__ == '__main__':
+    multiprocessing.set_start_method("spawn")
     # 提示用户输入视频路径
     video_path = input(f"Please input video file path: ").strip()
     # 新建字幕提取对象
     sd = SubtitleRemover(video_path)
     sd.run()
-
