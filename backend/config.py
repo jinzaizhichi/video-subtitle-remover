@@ -23,14 +23,17 @@ DET_MODEL_PATH = os.path.join(DET_MODEL_BASE, MODEL_VERSION, 'ch_det')
 SUBTITLE_AREA_DEVIATION_PIXEL = 50
 # 20个像素点以内的差距认为是同一行
 TOLERANCE_Y = 20
-# 高度查阈值
+# 高度差阈值
 THRESHOLD_HEIGHT_DIFFERENCE = 20
+# 是否将多个矩形框坐标归一
+UNITE_COORDINATES = True
 # 【根据自己的GPU显存大小设置】最大同时处理的图片数量
 MAX_INPAINT_NUM = 5
 # 【根据自己内存大小设置】
 MAX_LOAD_NUM = 20
-#
+# 最大同时线程数量
 MAX_WORKER = 4
+
 
 
 # 查看该路径下是否有模型完整文件，没有的话合并小文件生成完整文件

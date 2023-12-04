@@ -98,17 +98,17 @@ class SubtitleDetect:
             tbar.update(1)
             if sub_remover:
                 sub_remover.progress_total = (100 * float(current_frame_no) / float(frame_count)) // 2
-        subtitle_frame_no_box_dict = self.get_subtitle_frame_no_box_dict_with_united_coordinates(
-            subtitle_frame_no_box_dict)
-        if sub_remover is not None:
-            try:
-                # 当帧数大于1时，说明并非图片或单帧
-                if sub_remover.frame_count > 1:
-                    subtitle_frame_no_box_dict = self.filter_mistake_sub_area(subtitle_frame_no_box_dict,
-                                                                              sub_remover.fps)
-            except Exception:
-                pass
-        subtitle_frame_no_box_dict = self.prevent_missed_detection(subtitle_frame_no_box_dict)
+        if config.UNITE_COORDINATES:
+            subtitle_frame_no_box_dict = self.get_subtitle_frame_no_box_dict_with_united_coordinates(subtitle_frame_no_box_dict)
+            if sub_remover is not None:
+                try:
+                    # 当帧数大于1时，说明并非图片或单帧
+                    if sub_remover.frame_count > 1:
+                        subtitle_frame_no_box_dict = self.filter_mistake_sub_area(subtitle_frame_no_box_dict,
+                                                                                  sub_remover.fps)
+                except Exception:
+                    pass
+            subtitle_frame_no_box_dict = self.prevent_missed_detection(subtitle_frame_no_box_dict)
         print('[Finished] Finished finding subtitles...')
         return subtitle_frame_no_box_dict
 
@@ -263,7 +263,7 @@ class SubtitleDetect:
 
     def prevent_missed_detection(self, subtitle_frame_no_box_dict):
         """
-        添加额外的文本框，防止露漏检
+        添加额外的文本框，防止漏检
         """
         frame_no_list = self.get_continuous_frame_no(subtitle_frame_no_box_dict)
         for start_no, end_no in frame_no_list:
