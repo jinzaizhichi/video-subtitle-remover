@@ -26,14 +26,13 @@ TOLERANCE_Y = 20
 # 高度差阈值
 THRESHOLD_HEIGHT_DIFFERENCE = 20
 # 是否将多个矩形框坐标归一，开启该选项可以防止漏检，但是会导致去除的水印区域变大
-UNITE_COORDINATES = True
+UNITE_COORDINATES = False
 # 【根据自己的GPU显存大小设置】最大同时处理的图片数量
 MAX_INPAINT_NUM = 5
 # 【根据自己内存大小设置】
 MAX_LOAD_NUM = 20
 # 最大同时线程数量
 MAX_WORKER = 4
-
 
 
 # 查看该路径下是否有模型完整文件，没有的话合并小文件生成完整文件
