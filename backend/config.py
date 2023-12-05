@@ -1,6 +1,3 @@
-import warnings
-warnings.filterwarnings("ignore")
-warnings.simplefilter("ignore", DeprecationWarning)
 import os
 import torch
 import logging
