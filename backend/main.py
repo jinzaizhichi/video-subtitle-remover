@@ -6,9 +6,7 @@ from pathlib import Path
 import threading
 import cv2
 import sys
-import paddle
-from backend.tools.inpaint_tools import parallel_inference, inpaint_video, inference_task, batch_generator, create_mask, \
-    inpaint
+from backend.tools.inpaint_tools import create_mask, inpaint
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
