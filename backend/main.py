@@ -92,7 +92,8 @@ class SubtitleDetect:
                             temp_list.append((xmin, xmax, ymin, ymax))
                     else:
                         temp_list.append((xmin, xmax, ymin, ymax))
-                subtitle_frame_no_box_dict[current_frame_no] = temp_list
+                if len(temp_list) > 0:
+                    subtitle_frame_no_box_dict[current_frame_no] = temp_list
             tbar.update(1)
             if sub_remover:
                 sub_remover.progress_total = (100 * float(current_frame_no) / float(frame_count)) // 2
