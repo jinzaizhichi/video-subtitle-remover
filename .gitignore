@@ -368,3 +368,5 @@ test*.py
 test_*.mp4
 test*_no_sub*.mp4
 /test/coods/
+/local_test/
+/backend/models/video/ProPainter.pth

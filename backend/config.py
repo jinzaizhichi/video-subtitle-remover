@@ -13,6 +13,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LAMA_CONFIG = os.path.join(BASE_DIR, 'inpaint', 'lama', 'configs', 'prediction', 'default.yaml')
 LAMA_MODEL_PATH = os.path.join(BASE_DIR, 'models', 'big-lama')
+VIDEO_INPAINT_MODEL_PATH = os.path.join(BASE_DIR, 'models', 'video')
 MODEL_VERSION = 'V4'
 DET_MODEL_BASE = os.path.join(BASE_DIR, 'models')
 DET_MODEL_PATH = os.path.join(DET_MODEL_BASE, MODEL_VERSION, 'ch_det')
@@ -43,6 +44,9 @@ if 'inference.pdiparams' not in os.listdir(DET_MODEL_PATH):
     fs = Filesplit()
     fs.merge(input_dir=DET_MODEL_PATH)
 
+if 'ProPainter.pth' not in os.listdir(VIDEO_INPAINT_MODEL_PATH):
+    fs = Filesplit()
+    fs.merge(input_dir=VIDEO_INPAINT_MODEL_PATH)
 
 # 指定ffmpeg可执行程序路径
 sys_str = platform.system()
