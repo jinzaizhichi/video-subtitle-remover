@@ -4,7 +4,6 @@ import cv2
 import numpy as np
 import scipy.ndimage
 from PIL import Image
-from tqdm import tqdm
 
 import torch
 import torchvision
@@ -131,14 +130,14 @@ def get_ref_index(mid_neighbor_id, neighbor_ids, length, ref_stride=10, ref_num=
 
 
 class VideoInpaint:
-    def __init__(self):
+    def __init__(self, sub_video_length=config.MAX_PROCESS_NUM, use_fp16=True):
         self.device = get_device()
-        self.use_fp16 = True
+        self.use_fp16 = use_fp16
         self.use_half = True if self.use_fp16 else False
         if self.device == torch.device('cpu'):
             self.use_half = False
         # Length of sub-video for long video inference.
-        self.sub_video_length = 80
+        self.sub_video_length = sub_video_length
         # Length of local neighboring frames.'
         self.neighbor_length = 10
         # Mask dilation for video and flow masking
@@ -203,7 +202,6 @@ class VideoInpaint:
         frames, flow_masks, masks_dilated = frames.to(self.device), flow_masks.to(self.device), masks_dilated.to(
             self.device)
         video_length = frames.size(1)
-        print(f'\nProcessing: [{video_length} frames]...')
         with torch.no_grad():
             # ---- compute flow ----
             if frames.size(-1) <= 640:
@@ -315,7 +313,7 @@ class VideoInpaint:
             ref_num = -1
 
         # ---- feature propagation + transformer ----
-        for f in tqdm(range(0, video_length, neighbor_stride)):
+        for f in range(0, video_length, neighbor_stride):
             neighbor_ids = [
                 i for i in range(max(0, f - neighbor_stride),
                                  min(video_length, f + neighbor_stride + 1))
@@ -347,6 +345,7 @@ class VideoInpaint:
                     comp_frames[idx] = comp_frames[idx].astype(np.uint8)
             torch.cuda.empty_cache()
         # save videos frame
+        comp_frames = [cv2.cvtColor(i, cv2.COLOR_RGB2BGR) for i in comp_frames]
         return comp_frames
 
 
@@ -364,7 +363,7 @@ def read_frames(v_path):
 
 if __name__ == '__main__':
     # VideoInpaint
-    video_inpaint = VideoInpaint()
+    video_inpaint = VideoInpaint(sub_video_length=80)
     frames = read_frames('/home/yao/Documents/Project/video-subtitle-remover/local_test/test1.mp4')
     mask = cv2.imread('/home/yao/Documents/Project/video-subtitle-remover/local_test/test1_mask.png')
     inpainted_frames = video_inpaint.inpaint(frames, mask)

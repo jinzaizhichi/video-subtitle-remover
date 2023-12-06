@@ -1,3 +1,5 @@
+import warnings
+warnings.filterwarnings('ignore')
 import os
 import torch
 import logging
@@ -6,7 +8,6 @@ import stat
 from fsplit.filesplit import Filesplit
 import paddle
 paddle.disable_signal_handler()
-
 logging.disable(logging.DEBUG)  # 关闭DEBUG日志的打印
 logging.disable(logging.WARNING)  # 关闭WARNING日志的打印
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -25,10 +26,12 @@ TOLERANCE_Y = 20
 THRESHOLD_HEIGHT_DIFFERENCE = 20
 # 是否将多个矩形框坐标归一，开启该选项可以防止漏检，但是会导致去除的水印区域变大
 UNITE_COORDINATES = True
-# 【根据自己的GPU显存大小设置】最大同时处理的图片数量
-MAX_INPAINT_NUM = 5
-# 【根据自己内存大小设置】
-MAX_LOAD_NUM = 20
+# 【根据自己的GPU显存大小设置】最大同时处理的图片数量，设置越大处理效果越好，但是要求显存越高
+# 1280x720p视频设置80需要25G显存，设置50需要19G显存
+# 720x480p视频设置80需要8G显存，设置50需要7G显存
+MAX_PROCESS_NUM = 10
+# 【根据自己内存大小设置，应该大于等于MAX_PROCESS_NUM】
+MAX_LOAD_NUM = 10
 # 最大同时线程数量
 MAX_WORKER = 4
 # 是否开启快速模式

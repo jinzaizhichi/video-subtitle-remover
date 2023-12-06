@@ -6,7 +6,9 @@ from pathlib import Path
 import threading
 import cv2
 import sys
-from backend.tools.inpaint_tools import create_mask, inpaint
+
+from backend.inpaint.video_inpaint import VideoInpaint
+from backend.tools.inpaint_tools import create_mask, inpaint, batch_generator
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -109,34 +111,54 @@ class SubtitleDetect:
                     pass
             subtitle_frame_no_box_dict = self.prevent_missed_detection(subtitle_frame_no_box_dict)
         print('[Finished] Finished finding subtitles...')
-        return subtitle_frame_no_box_dict
+        new_subtitle_frame_no_box_dict = dict()
+        for key in subtitle_frame_no_box_dict.keys():
+            if len(subtitle_frame_no_box_dict[key]) > 0:
+                new_subtitle_frame_no_box_dict[key] = subtitle_frame_no_box_dict[key]
+        return new_subtitle_frame_no_box_dict
 
     @staticmethod
-    def get_continuous_frame_no(subtitle_frame_no_box_dict):
+    def find_continuous_ranges(subtitle_frame_no_box_dict):
         """
         获取字幕出现的起始帧号与结束帧号
         """
-        sub_frame_no_list = list(subtitle_frame_no_box_dict.keys())
-        sub_frame_no_list_continuous = list()
-        is_finding_start = True
-        is_finding_end = False
-        start_frame_no = sub_frame_no_list[0]
-        for i, item in enumerate(sub_frame_no_list):
-            if is_finding_start:
-                start_frame_no = item
-                is_finding_start = False
-                is_finding_end = True
-            if i + 1 < len(sub_frame_no_list) and item + 1 != sub_frame_no_list[i + 1]:
-                if is_finding_end:
-                    end_frame_no = item
-                    is_finding_end = False
-                    is_finding_start = True
-                    sub_frame_no_list_continuous.append((start_frame_no, end_frame_no))
-                continue
-            if i + 1 == len(sub_frame_no_list):
-                end_frame_no = item
-                sub_frame_no_list_continuous.append((start_frame_no, end_frame_no))
-        return sub_frame_no_list_continuous
+        numbers = sorted(list(subtitle_frame_no_box_dict.keys()))
+        ranges = []
+        start = numbers[0]  # 初始区间开始值
+
+        for i in range(1, len(numbers)):
+            # 如果当前数字与前一个数字间隔超过1，
+            # 则上一个区间结束，记录当前区间的开始与结束
+            if numbers[i] - numbers[i - 1] != 1:
+                end = numbers[i - 1]  # 则该数字是当前连续区间的终点
+                ranges.append((start, end))
+                start = numbers[i]  # 开始下一个连续区间
+        # 添加最后一个区间
+        ranges.append((start, numbers[-1]))
+        return ranges
+
+    @staticmethod
+    def find_continuous_ranges_with_same_mask(subtitle_frame_no_box_dict):
+        numbers = sorted(list(subtitle_frame_no_box_dict.keys()))
+        ranges = []
+        start = numbers[0]  # 初始区间开始值
+        for i in range(1, len(numbers)):
+            # 如果当前帧号与前一个帧号间隔超过1，
+            # 则上一个区间结束，记录当前区间的开始与结束
+            if numbers[i] - numbers[i - 1] != 1:
+                end = numbers[i - 1]  # 则该数字是当前连续区间的终点
+                ranges.append((start, end))
+                start = numbers[i]  # 开始下一个连续区间
+            # 如果当前帧号与前一个帧号间隔为1，且当前帧号对应的坐标点与上一帧号对应的坐标点不一致
+            # 记录当前区间的开始与结束
+            if numbers[i] - numbers[i - 1] == 1:
+                if subtitle_frame_no_box_dict[numbers[i]] != subtitle_frame_no_box_dict[numbers[i - 1]]:
+                    end = numbers[i - 1]  # 则该数字是当前连续区间的终点
+                    ranges.append((start, end))
+                    start = numbers[i]  # 开始下一个连续区间
+        # 添加最后一个区间
+        ranges.append((start, numbers[-1]))
+        return ranges
 
     @staticmethod
     def sub_area_to_polygon(sub_area):
@@ -232,7 +254,7 @@ class SubtitleDetect:
         将多个视频帧的文本区域坐标统一
         """
         subtitle_frame_no_box_dict_with_united_coordinates = dict()
-        frame_no_list = self.get_continuous_frame_no(subtitle_frame_no_box_dict)
+        frame_no_list = self.find_continuous_ranges(subtitle_frame_no_box_dict)
         area_max_box_dict = self.get_area_max_box_dict(frame_no_list, subtitle_frame_no_box_dict)
         for start_no, end_no in frame_no_list:
             current_no = start_no
@@ -264,7 +286,7 @@ class SubtitleDetect:
         """
         添加额外的文本框，防止漏检
         """
-        frame_no_list = self.get_continuous_frame_no(subtitle_frame_no_box_dict)
+        frame_no_list = self.find_continuous_ranges(subtitle_frame_no_box_dict)
         for start_no, end_no in frame_no_list:
             current_no = start_no
             while True:
@@ -299,7 +321,7 @@ class SubtitleDetect:
         """
         过滤错误的字幕区域
         """
-        sub_frame_no_list_continuous = self.get_continuous_frame_no(subtitle_frame_no_box_dict)
+        sub_frame_no_list_continuous = self.find_continuous_ranges(subtitle_frame_no_box_dict)
         sub_area_with_frequency = self.get_frequency_in_range(sub_frame_no_list_continuous, subtitle_frame_no_box_dict)
         correct_sub_area = []
         for sub_area in sub_area_with_frequency.keys():
@@ -341,6 +363,7 @@ class SubtitleRemover:
         self.fps = self.video_cap.get(cv2.CAP_PROP_FPS)
         # 视频尺寸
         self.size = (int(self.video_cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(self.video_cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+        self.mask_size = (int(self.video_cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), int(self.video_cap.get(cv2.CAP_PROP_FRAME_WIDTH)))
         self.frame_height = int(self.video_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.frame_width = int(self.video_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         # 创建字幕检测对象
@@ -351,6 +374,7 @@ class SubtitleRemover:
         self.video_writer = cv2.VideoWriter(self.video_temp_file.name, cv2.VideoWriter_fourcc(*'mp4v'), self.fps,
                                             self.size)
         self.video_out_name = os.path.join(os.path.dirname(self.video_path), f'{self.vd_name}_no_sub.mp4')
+        self.video_inpaint = VideoInpaint(config.MAX_PROCESS_NUM)
         self.ext = os.path.splitext(vd_path)[-1]
         if self.is_picture:
             pic_dir = os.path.join(os.path.dirname(self.video_path), 'no_sub')
@@ -390,9 +414,20 @@ class SubtitleRemover:
                 coordinate_list.append((xmin, xmax, ymin, ymax))
         return coordinate_list
 
-    def update_progress(self, tbar, increment, index):
+    @staticmethod
+    def is_current_frame_no_start(frame_no, continuous_frame_no_list):
+        """
+        判断给定的帧号是否为开头，是的话返回结束帧号，不是的话返回-1
+        """
+        for start_no, end_no in continuous_frame_no_list:
+            if start_no == frame_no:
+                return end_no
+        return -1
+
+    def update_progress(self, tbar, increment):
         tbar.update(increment)
-        self.progress_remover = 100 * float(index) / float(self.frame_count) // 2
+        current_percentage = (tbar.n / tbar.total) * 100
+        self.progress_remover = int(current_percentage) // 2
         self.progress_total = 50 + self.progress_remover
 
     def run(self):
@@ -402,90 +437,92 @@ class SubtitleRemover:
         # 寻找字幕帧
         self.progress_total = 0
         sub_list = self.sub_detector.find_subtitle_frame_no(sub_remover=self)
+        continuous_frame_no_list = self.sub_detector.find_continuous_ranges_with_same_mask(sub_list)
         tbar = tqdm(total=int(self.frame_count), unit='frame', position=0, file=sys.__stdout__,
                     desc='Subtitle Removing')
         print('[Processing] start removing subtitles...')
 
-        # *********************** 多线程方案 start ***********************
-        # （1）不加锁的话CUDA线程不安全，生成图片错乱
-        # （1）加锁的话CUDA线程安全，单速度与单线程方案无任何提升
-        # # 待处理视频帧列表
-        # frame_to_inpaint_list = []
-        # # 无需处理的视频帧列表
-        # frame_no_need_inpaint_dict = dict()
-        # index = 0
-        # # # 将需要处理的视频帧读取到内存
-        # while True:
-        #     ret, frame = self.video_cap.read()
-        #     if not ret:
-        #         break
-        #     index += 1
-        #     if index in sub_list.keys():
-        #         frame_to_inpaint_list.append((index, frame, sub_list[index]))
-        #     else:
-        #         frame_no_need_inpaint_dict[index] = frame
-        # # 将数据分批，每批MAX_INPAINT_NUM个样本
-        # batches = [frame_to_inpaint_list[i:i + config.MAX_INPAINT_NUM] for i in range(0, len(frame_to_inpaint_list), config.MAX_INPAINT_NUM)]
-        # # 将分批前的数据删除
-        # # frame_to_inpaint_list.clear()
-        # # 接受批处理结果
-        # inpainted_frame_dict = dict()
-        # # 使用ThreadPoolExecutor处理每个批次
-        # current_max = 0
-        # with ThreadPoolExecutor(max_workers=config.MAX_WORKER) as executor:
-        #     future_to_batch = {executor.submit(inference_task, batch): batch for batch in batches}
-        #     for future in as_completed(future_to_batch):
-        #         batch_result = future.result()
-        #         tbar.update(len(batch_result.keys()))
-        #         if max(batch_result.keys()) > current_max:
-        #             current_max = max(batch_result.keys())
-        #             self.progress_remover = 100 * float(current_max) / float(self.frame_count) // 2
-        #             self.progress_total = 50 + self.progress_remover
-        #         # 预览视频帧
-        #         for index in sorted(batch_result.keys()):
-        #             self.preview_frame = batch_result[index]
-        #         # 将处理后的结果保存到结果字典
-        #         inpainted_frame_dict.update(batch_result)
-        # print(inpainted_frame_dict.keys())
-        #
-        # # 开始写视频
-        # index = 0
-        # while index <= self.frame_count:
-        #     # 读取视频帧
-        #     index += 1
-        #     if index in inpainted_frame_dict.keys():
-        #         self.video_writer.write(inpainted_frame_dict[index])
-        #     elif index in frame_no_need_inpaint_dict.keys():
-        #         self.video_writer.write(frame_no_need_inpaint_dict[index])
-        # self.video_writer.release()
-        # self.video_cap.release()
-        # *********************** 多线程方案 end ***********************
-
-        # *********************** 单线程方案 start ***********************
-        index = 0
-        while True:
-            ret, frame = self.video_cap.read()
-            if not ret:
-                break
-            original_frame = frame
-            index += 1
-            if index in sub_list.keys():
-                mask = create_mask(frame, sub_list[index])
-                if config.FAST_MODE:
-                    frame = cv2.inpaint(frame, mask, 3, cv2.INPAINT_TELEA)
-                else:
-                    frame = inpaint(frame, mask)
+        if self.is_picture:
+            original_frame = cv2.imread(self.video_path)
+            mask = create_mask(original_frame.shape[0:2], sub_list[1])
+            frame = inpaint(original_frame, mask)
+            cv2.imencode(self.ext, frame)[1].tofile(self.video_out_name)
             self.preview_frame = cv2.hconcat([original_frame, frame])
-            if self.is_picture:
-                cv2.imencode(self.ext, frame)[1].tofile(self.video_out_name)
-            else:
-                self.video_writer.write(frame)
             tbar.update(1)
-            self.progress_remover = 100 * float(index) / float(self.frame_count) // 2
-            self.progress_total = 50 + self.progress_remover
-        self.video_cap.release()
-        self.video_writer.release()
-        # *********************** 单线程方案 end ***********************
+            self.progress_total = 100
+        else:
+
+            # *********************** 单线程方案 start ***********************
+            # index = 0
+            # while True:
+            #     ret, frame = self.video_cap.read()
+            #     if not ret:
+            #         break
+            #     original_frame = frame
+            #     index += 1
+            #     if index in sub_list.keys():
+            #         mask = create_mask(self.mask_size, sub_list[index])
+            #         if config.FAST_MODE:
+            #             frame = cv2.inpaint(frame, mask, 3, cv2.INPAINT_TELEA)
+            #         else:
+            #             frame = inpaint(frame, mask)
+            #     self.preview_frame = cv2.hconcat([original_frame, frame])
+            #     if self.is_picture:
+            #         cv2.imencode(self.ext, frame)[1].tofile(self.video_out_name)
+            #     else:
+            #         self.video_writer.write(frame)
+            #     tbar.update(1)
+            #     self.progress_remover = 100 * float(index) / float(self.frame_count) // 2
+            #     self.progress_total = 50 + self.progress_remover
+            # self.video_cap.release()
+            # self.video_writer.release()
+            # # *********************** 单线程方案 end ***********************
+
+            index = 0
+            while True:
+                ret, frame = self.video_cap.read()
+                if not ret:
+                    break
+                index += 1
+                end_frame_no = self.is_current_frame_no_start(index, continuous_frame_no_list)
+                # 判断当前帧号是不是字幕起始位置，不是的话直接写视频帧
+                if end_frame_no == -1:
+                    self.video_writer.write(frame)
+                    self.update_progress(tbar, increment=1)
+                    continue
+                else:
+                    # 读取该区间所有帧
+                    start_frame_no = index
+                    temp_frames = []
+                    while index <= end_frame_no:
+                        ret, frame = self.video_cap.read()
+                        if not ret:
+                            break
+                        index += 1
+                        temp_frames.append(frame)
+                    if len(temp_frames) < 1:
+                        continue
+                    elif len(temp_frames) == 1:
+                        single_mask = create_mask(self.mask_size, sub_list[index])
+                        inpainted_frame = inpaint(frame, single_mask)
+                        self.video_writer.write(inpainted_frame)
+                        self.update_progress(tbar, increment=1)
+                        continue
+                    else:
+                        # 将读取的视频帧分批处理
+                        # 1. 获取当前批次使用的mask
+                        mask = create_mask(self.mask_size, sub_list[start_frame_no])
+                        for batch in batch_generator(temp_frames, config.MAX_LOAD_NUM):
+                            # 2. 调用批推理
+                            if len(batch) <= 1:
+                                continue
+                            print(f'process {len(batch)} frames')
+                            inpainted_frames = self.video_inpaint.inpaint(batch, mask)
+                            for i, inpainted_frame in enumerate(inpainted_frames):
+                                self.preview_frame = cv2.hconcat([batch[i], inpainted_frame])
+                                self.video_writer.write(inpainted_frame)
+                            self.update_progress(tbar, increment=len(batch))
+            self.video_writer.release()
 
         if not self.is_picture:
             # 将原音频合并到新生成的视频文件中

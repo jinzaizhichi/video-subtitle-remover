@@ -78,16 +78,6 @@ class LamaInpInpaint:
             return cur_res
 
 
-def create_mask(input_img, coords_list):
-    mask = np.zeros(input_img.shape[0:2], dtype="uint8")
-    if coords_list:
-        for coords in coords_list:
-            xmin, xmax, ymin, ymax = coords
-            # 为了避免框过小，放大10个像素
-            cv2.rectangle(mask, (xmin - 10, ymin - 10), (xmax + 10, ymax + 10), (255, 255, 255), thickness=-1)
-    return mask
-
-
 lamaInpInpaintApp = LamaInpInpaint(config.LAMA_CONFIG, config.LAMA_MODEL_PATH, config.device)
 
 if __name__ == '__main__':
