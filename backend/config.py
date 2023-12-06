@@ -34,9 +34,13 @@ MAX_PROCESS_NUM = 10
 MAX_LOAD_NUM = 10
 # 最大同时线程数量
 MAX_WORKER = 4
-# 是否开启快速模式
+# 是否开启精细模式，开启精细模式将消耗大量GPU显存，如果您的显卡显存较少，建议设置为False
+ACCURATE_MODE = True
+# 是否开启快速模型，不保证inpaint效果
 FAST_MODE = False
-
+# 如果开启了快速模式，则强制关闭ACCURATE_MODE
+if FAST_MODE:
+    ACCURATE_MODE = False
 
 # 查看该路径下是否有模型完整文件，没有的话合并小文件生成完整文件
 if 'best.ckpt' not in (os.listdir(os.path.join(LAMA_MODEL_PATH, 'models'))):
