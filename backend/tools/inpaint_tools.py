@@ -6,11 +6,29 @@ from backend import config
 from backend.inpaint.lama_inpaint import lamaInpInpaintApp
 
 
-def batch_generator(data, batch_size=None):
-    if batch_size is None:
-        batch_size = config.MAX_PROCESS_NUM
-    for i in range(0, len(data), batch_size):
-        yield data[i:i + batch_size]
+def batch_generator(data, max_batch_size):
+    """
+    根据data大小，生成最大长度不超过max_batch_size的均匀批次数据
+    """
+    n_samples = len(data)
+    # 尝试找到一个比MAX_BATCH_SIZE小的batch_size，以使得所有的批次数量尽量接近
+    batch_size = max_batch_size
+    num_batches = n_samples // batch_size
+
+    # 处理最后一批可能不足batch_size的情况
+    # 如果最后一批少于其他批次，则减小batch_size尝试平衡每批的数量
+    while n_samples % batch_size < batch_size / 2.0 and batch_size > 1:
+        batch_size -= 1  # 减小批次大小
+        num_batches = n_samples // batch_size
+
+    # 生成前num_batches个批次
+    for i in range(num_batches):
+        yield data[i * batch_size:(i + 1) * batch_size]
+
+    # 将剩余的数据作为最后一个批次
+    last_batch_start = num_batches * batch_size
+    if last_batch_start < n_samples:
+        yield data[last_batch_start:]
 
 
 def inference_task(batch_data):
@@ -59,7 +77,7 @@ def create_mask(size, coords_list):
         for coords in coords_list:
             xmin, xmax, ymin, ymax = coords
             # 为了避免框过小，放大10个像素
-            cv2.rectangle(mask, (xmin - 5, ymin - 5), (xmax + 5, ymax + 5), (255, 255, 255), thickness=-1)
+            cv2.rectangle(mask, (xmin - 10, ymin - 10), (xmax + 10, ymax + 10), (255, 255, 255), thickness=-1)
     return mask
 
 

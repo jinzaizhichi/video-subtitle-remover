@@ -57,27 +57,7 @@ class CorrBlock:
 
         corr = torch.matmul(fmap1.transpose(1,2), fmap2)
         corr = corr.view(batch, ht, wd, 1, ht, wd)
-        return corr  / torch.sqrt(torch.tensor(dim).float())
-
-
-class CorrLayer(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, fmap1, fmap2, coords, r):
-        fmap1 = fmap1.contiguous()
-        fmap2 = fmap2.contiguous()
-        coords = coords.contiguous()
-        ctx.save_for_backward(fmap1, fmap2, coords)
-        ctx.r = r
-        corr, = correlation_cudaz.forward(fmap1, fmap2, coords, ctx.r)
-        return corr
-
-    @staticmethod
-    def backward(ctx, grad_corr):
-        fmap1, fmap2, coords = ctx.saved_tensors
-        grad_corr = grad_corr.contiguous()
-        fmap1_grad, fmap2_grad, coords_grad = \
-            correlation_cudaz.backward(fmap1, fmap2, coords, grad_corr, ctx.r)
-        return fmap1_grad, fmap2_grad, coords_grad, None
+        return corr / torch.sqrt(torch.tensor(dim).float())
 
 
 class AlternateCorrBlock:

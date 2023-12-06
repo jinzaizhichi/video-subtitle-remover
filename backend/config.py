@@ -18,6 +18,11 @@ VIDEO_INPAINT_MODEL_PATH = os.path.join(BASE_DIR, 'models', 'video')
 MODEL_VERSION = 'V4'
 DET_MODEL_BASE = os.path.join(BASE_DIR, 'models')
 DET_MODEL_PATH = os.path.join(DET_MODEL_BASE, MODEL_VERSION, 'ch_det')
+
+# ×××××××××××××××××××× [可以改] start ××××××××××××××××××××
+# 容忍的像素点偏差
+PIXEL_TOLERANCE_Y = 20  # 允许检测框纵向偏差50个像素点
+PIXEL_TOLERANCE_X = 20  # 允许检测框横向偏差100个像素点
 # 字幕区域偏移量
 SUBTITLE_AREA_DEVIATION_PIXEL = 50
 # 20个像素点以内的差距认为是同一行
@@ -38,10 +43,10 @@ MAX_WORKER = 4
 ACCURATE_MODE = True
 # 是否开启快速模型，不保证inpaint效果
 FAST_MODE = False
-# 如果开启了快速模式，则强制关闭ACCURATE_MODE
-if FAST_MODE:
-    ACCURATE_MODE = False
+# ×××××××××××××××××××× [可以改] start ××××××××××××××××××××
 
+
+# ×××××××××××××××××××× [不要改] start ××××××××××××××××××××
 # 查看该路径下是否有模型完整文件，没有的话合并小文件生成完整文件
 if 'best.ckpt' not in (os.listdir(os.path.join(LAMA_MODEL_PATH, 'models'))):
     fs = Filesplit()
@@ -72,3 +77,8 @@ if 'ffmpeg.exe' not in os.listdir(os.path.join(BASE_DIR, '', 'ffmpeg', 'win_x64'
 os.chmod(FFMPEG_PATH, stat.S_IRWXU+stat.S_IRWXG+stat.S_IRWXO)
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+
+# 如果开启了快速模式，则强制关闭ACCURATE_MODE
+if FAST_MODE:
+    ACCURATE_MODE = False
+# ×××××××××××××××××××× [不要改] end ××××××××××××××××××××

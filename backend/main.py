@@ -99,23 +99,66 @@ class SubtitleDetect:
             tbar.update(1)
             if sub_remover:
                 sub_remover.progress_total = (100 * float(current_frame_no) / float(frame_count)) // 2
-        if config.UNITE_COORDINATES:
-            subtitle_frame_no_box_dict = self.get_subtitle_frame_no_box_dict_with_united_coordinates(subtitle_frame_no_box_dict)
-            if sub_remover is not None:
-                try:
-                    # 当帧数大于1时，说明并非图片或单帧
-                    if sub_remover.frame_count > 1:
-                        subtitle_frame_no_box_dict = self.filter_mistake_sub_area(subtitle_frame_no_box_dict,
-                                                                                  sub_remover.fps)
-                except Exception:
-                    pass
-            subtitle_frame_no_box_dict = self.prevent_missed_detection(subtitle_frame_no_box_dict)
+        subtitle_frame_no_box_dict = self.unify_regions(subtitle_frame_no_box_dict)
+        # if config.UNITE_COORDINATES:
+        #     subtitle_frame_no_box_dict = self.get_subtitle_frame_no_box_dict_with_united_coordinates(subtitle_frame_no_box_dict)
+        #     if sub_remover is not None:
+        #         try:
+        #             # 当帧数大于1时，说明并非图片或单帧
+        #             if sub_remover.frame_count > 1:
+        #                 subtitle_frame_no_box_dict = self.filter_mistake_sub_area(subtitle_frame_no_box_dict,
+        #                                                                           sub_remover.fps)
+        #         except Exception:
+        #             pass
+        #     subtitle_frame_no_box_dict = self.prevent_missed_detection(subtitle_frame_no_box_dict)
         print('[Finished] Finished finding subtitles...')
         new_subtitle_frame_no_box_dict = dict()
         for key in subtitle_frame_no_box_dict.keys():
             if len(subtitle_frame_no_box_dict[key]) > 0:
                 new_subtitle_frame_no_box_dict[key] = subtitle_frame_no_box_dict[key]
         return new_subtitle_frame_no_box_dict
+
+    @staticmethod
+    def are_similar(region1, region2):
+        """判断两个区域是否相似。"""
+        xmin1, xmax1, ymin1, ymax1 = region1
+        xmin2, xmax2, ymin2, ymax2 = region2
+
+        return abs(xmin1 - xmin2) <= config.PIXEL_TOLERANCE_X and abs(xmax1 - xmax2) <= config.PIXEL_TOLERANCE_X and \
+            abs(ymin1 - ymin2) <= config.PIXEL_TOLERANCE_Y and abs(ymax1 - ymax2) <= config.PIXEL_TOLERANCE_Y
+
+    def unify_regions(self, raw_regions):
+        """将连续相似的区域统一，保持列表结构。"""
+        keys = sorted(raw_regions.keys())  # 对键进行排序以确保它们是连续的
+        unified_regions = {}
+
+        # 初始化
+        last_key = keys[0]
+        unify_value_map = {last_key: raw_regions[last_key]}
+
+        for key in keys[1:]:
+            current_regions = raw_regions[key]
+
+            # 新增一个列表来存放匹配过的标准区间
+            new_unify_values = []
+
+            for idx, region in enumerate(current_regions):
+                last_standard_region = unify_value_map[last_key][idx] if idx < len(unify_value_map[last_key]) else None
+
+                # 如果当前的区间与前一个键的对应区间相似，我们统一它们
+                if last_standard_region and self.are_similar(region, last_standard_region):
+                    new_unify_values.append(last_standard_region)
+                else:
+                    new_unify_values.append(region)
+
+            # 更新unify_value_map为最新的区间值
+            unify_value_map[key] = new_unify_values
+            last_key = key
+
+        # 将最终统一后的结果传递给unified_regions
+        for key in keys:
+            unified_regions[key] = unify_value_map[key]
+        return unified_regions
 
     @staticmethod
     def find_continuous_ranges(subtitle_frame_no_box_dict):
@@ -254,7 +297,7 @@ class SubtitleDetect:
         将多个视频帧的文本区域坐标统一
         """
         subtitle_frame_no_box_dict_with_united_coordinates = dict()
-        frame_no_list = self.find_continuous_ranges(subtitle_frame_no_box_dict)
+        frame_no_list = self.find_continuous_ranges_with_same_mask(subtitle_frame_no_box_dict)
         area_max_box_dict = self.get_area_max_box_dict(frame_no_list, subtitle_frame_no_box_dict)
         for start_no, end_no in frame_no_list:
             current_no = start_no
@@ -286,7 +329,7 @@ class SubtitleDetect:
         """
         添加额外的文本框，防止漏检
         """
-        frame_no_list = self.find_continuous_ranges(subtitle_frame_no_box_dict)
+        frame_no_list = self.find_continuous_ranges_with_same_mask(subtitle_frame_no_box_dict)
         for start_no, end_no in frame_no_list:
             current_no = start_no
             while True:
@@ -321,7 +364,7 @@ class SubtitleDetect:
         """
         过滤错误的字幕区域
         """
-        sub_frame_no_list_continuous = self.find_continuous_ranges(subtitle_frame_no_box_dict)
+        sub_frame_no_list_continuous = self.find_continuous_ranges_with_same_mask(subtitle_frame_no_box_dict)
         sub_area_with_frequency = self.get_frequency_in_range(sub_frame_no_list_continuous, subtitle_frame_no_box_dict)
         correct_sub_area = []
         for sub_area in sub_area_with_frequency.keys():
@@ -421,6 +464,16 @@ class SubtitleRemover:
         """
         for start_no, end_no in continuous_frame_no_list:
             if start_no == frame_no:
+                return True
+        return False
+
+    @staticmethod
+    def find_frame_no_end(frame_no, continuous_frame_no_list):
+        """
+        判断给定的帧号是否为开头，是的话返回结束帧号，不是的话返回-1
+        """
+        for start_no, end_no in continuous_frame_no_list:
+            if start_no <= frame_no <= end_no:
                 return end_no
         return -1
 
@@ -437,6 +490,8 @@ class SubtitleRemover:
         # 寻找字幕帧
         self.progress_total = 0
         sub_list = self.sub_detector.find_subtitle_frame_no(sub_remover=self)
+        # from test1_dict_raw import test1_raw
+        # sub_list = self.sub_detector.unify_regions(test1_raw)
         continuous_frame_no_list = self.sub_detector.find_continuous_ranges_with_same_mask(sub_list)
         tbar = tqdm(total=int(self.frame_count), unit='frame', position=0, file=sys.__stdout__,
                     desc='Subtitle Removing')
@@ -452,7 +507,80 @@ class SubtitleRemover:
             self.progress_total = 100
         else:
             if config.ACCURATE_MODE:
+                # *********************** 批推理方案 start ***********************
+                print('use accurate mode')
+                index = 0
+                while True:
+                    ret, frame = self.video_cap.read()
+                    if not ret:
+                        break
+                    index += 1
+                    # 如果当前帧没有水印/文本则直接写
+                    if index not in sub_list.keys():
+                        self.video_writer.write(frame)
+                        print(f'No 1 write frame: {index}')
+                        self.update_progress(tbar, increment=1)
+                        continue
+                    # 如果有水印，判断该帧是不是开头帧
+                    else:
+                        print(f'No 1 Current index: {index}')
+                        # 如果是开头帧，则批推理到尾帧
+                        if self.is_current_frame_no_start(index, continuous_frame_no_list):
+                            start_frame_no = index
+                            print(f'find start: {start_frame_no}')
+                            # 找到结束帧
+                            end_frame_no = self.find_frame_no_end(index, continuous_frame_no_list)
+                            # 判断当前帧号是不是字幕起始位置
+                            # 如果获取的结束帧号不为-1则说明
+                            if end_frame_no != -1:
+                                print(f'find end: {end_frame_no}')
+                                # ************ 读取该区间所有帧 start ************
+                                temp_frames = []
+                                # 这里是小于，不能等于，因为下一帧还没读
+                                while index < end_frame_no:
+                                    ret, frame = self.video_cap.read()
+                                    if not ret:
+                                        break
+                                    index += 1
+                                    temp_frames.append(frame)
+                                print(f'No 2 current index: {index}')
+                                # ************ 读取该区间所有帧 end ************
+                                if len(temp_frames) < 1:
+                                    continue
+                                elif len(temp_frames) == 1:
+                                    single_mask = create_mask(self.mask_size, sub_list[index])
+                                    inpainted_frame = inpaint(frame, single_mask)
+                                    self.video_writer.write(inpainted_frame)
+                                    print(f'No 2 write frame: {index} with mask {sub_list[index]}')
+                                    self.update_progress(tbar, increment=1)
+                                    continue
+                                else:
+                                    # 将读取的视频帧分批处理
+                                    # 1. 获取当前批次使用的mask
+                                    mask = create_mask(self.mask_size, sub_list[start_frame_no])
+                                    inner_index = 0
+                                    for batch in batch_generator(temp_frames, config.MAX_LOAD_NUM):
+                                        # 2. 调用批推理
+                                        if len(batch) == 1:
+                                            single_mask = create_mask(self.mask_size, sub_list[start_frame_no])
+                                            inpainted_frame = inpaint(frame, single_mask)
+                                            print(f'No 3 write frame: {start_frame_no + inner_index} with mask {sub_list[start_frame_no]}')
+                                            inner_index += 1
+                                            self.video_writer.write(inpainted_frame)
+                                            self.update_progress(tbar, increment=1)
+                                        elif len(batch) > 1:
+                                            inpainted_frames = self.video_inpaint.inpaint(batch, mask)
+                                            for i, inpainted_frame in enumerate(inpainted_frames):
+                                                self.video_writer.write(inpainted_frame)
+                                                print(f'No 4 write frame: {start_frame_no + inner_index} with mask {sub_list[index]}')
+                                                inner_index += 1
+                                                self.preview_frame = cv2.hconcat([batch[i], inpainted_frame])
+                                        # print(f'process {len(batch)} frames')
+                                        self.update_progress(tbar, increment=len(batch))
+                # *********************** 批推理方案 end ***********************
+            else:
                 # *********************** 单线程方案 start ***********************
+                print('use normal mode')
                 index = 0
                 while True:
                     ret, frame = self.video_cap.read()
@@ -474,59 +602,9 @@ class SubtitleRemover:
                     tbar.update(1)
                     self.progress_remover = 100 * float(index) / float(self.frame_count) // 2
                     self.progress_total = 50 + self.progress_remover
-                self.video_cap.release()
-                self.video_writer.release()
                 # *********************** 单线程方案 end ***********************
-            else:
-                # *********************** 批推理方案 start ***********************
-                index = 0
-                while True:
-                    ret, frame = self.video_cap.read()
-                    if not ret:
-                        break
-                    index += 1
-                    end_frame_no = self.is_current_frame_no_start(index, continuous_frame_no_list)
-                    # 判断当前帧号是不是字幕起始位置，不是的话直接写视频帧
-                    if end_frame_no == -1:
-                        self.video_writer.write(frame)
-                        self.update_progress(tbar, increment=1)
-                        continue
-                    else:
-                        # 读取该区间所有帧
-                        start_frame_no = index
-                        temp_frames = []
-                        while index <= end_frame_no:
-                            ret, frame = self.video_cap.read()
-                            if not ret:
-                                break
-                            index += 1
-                            temp_frames.append(frame)
-                        if len(temp_frames) < 1:
-                            continue
-                        elif len(temp_frames) == 1:
-                            single_mask = create_mask(self.mask_size, sub_list[index])
-                            inpainted_frame = inpaint(frame, single_mask)
-                            self.video_writer.write(inpainted_frame)
-                            self.update_progress(tbar, increment=1)
-                            continue
-                        else:
-                            # 将读取的视频帧分批处理
-                            # 1. 获取当前批次使用的mask
-                            mask = create_mask(self.mask_size, sub_list[start_frame_no])
-                            for batch in batch_generator(temp_frames, config.MAX_LOAD_NUM):
-                                # 2. 调用批推理
-                                if len(batch) <= 1:
-                                    continue
-                                print(f'process {len(batch)} frames')
-                                inpainted_frames = self.video_inpaint.inpaint(batch, mask)
-                                for i, inpainted_frame in enumerate(inpainted_frames):
-                                    self.preview_frame = cv2.hconcat([batch[i], inpainted_frame])
-                                    self.video_writer.write(inpainted_frame)
-                                self.update_progress(tbar, increment=len(batch))
-                self.video_writer.release()
-                self.video_cap.release()
-                # *********************** 批推理方案 end ***********************
-
+        self.video_cap.release()
+        self.video_writer.release()
         if not self.is_picture:
             # 将原音频合并到新生成的视频文件中
             self.merge_audio_to_video()
