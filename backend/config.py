@@ -29,16 +29,12 @@ SUBTITLE_AREA_DEVIATION_PIXEL = 50
 TOLERANCE_Y = 20
 # 高度差阈值
 THRESHOLD_HEIGHT_DIFFERENCE = 20
-# 是否将多个矩形框坐标归一，开启该选项可以防止漏检，但是会导致去除的水印区域变大
-UNITE_COORDINATES = True
 # 【根据自己的GPU显存大小设置】最大同时处理的图片数量，设置越大处理效果越好，但是要求显存越高
 # 1280x720p视频设置80需要25G显存，设置50需要19G显存
 # 720x480p视频设置80需要8G显存，设置50需要7G显存
-MAX_PROCESS_NUM = 10
+MAX_PROCESS_NUM = 70
 # 【根据自己内存大小设置，应该大于等于MAX_PROCESS_NUM】
-MAX_LOAD_NUM = 10
-# 最大同时线程数量
-MAX_WORKER = 4
+MAX_LOAD_NUM = 70
 # 是否开启精细模式，开启精细模式将消耗大量GPU显存，如果您的显卡显存较少，建议设置为False
 ACCURATE_MODE = True
 # 是否开启快速模型，不保证inpaint效果
