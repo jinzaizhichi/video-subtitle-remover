@@ -23,8 +23,8 @@ DET_MODEL_PATH = os.path.join(DET_MODEL_BASE, MODEL_VERSION, 'ch_det')
 # 容忍的像素点偏差
 PIXEL_TOLERANCE_Y = 20  # 允许检测框纵向偏差50个像素点
 PIXEL_TOLERANCE_X = 20  # 允许检测框横向偏差100个像素点
-# 字幕区域偏移量
-SUBTITLE_AREA_DEVIATION_PIXEL = 50
+# 字幕区域偏移量， 放大诗歌像素点，防止字幕偏移
+SUBTITLE_AREA_DEVIATION_PIXEL = 10
 # 20个像素点以内的差距认为是同一行
 TOLERANCE_Y = 20
 # 高度差阈值
