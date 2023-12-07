@@ -414,7 +414,7 @@ class SubtitleRemover:
         self.video_writer = cv2.VideoWriter(self.video_temp_file.name, cv2.VideoWriter_fourcc(*'mp4v'), self.fps,
                                             self.size)
         self.video_out_name = os.path.join(os.path.dirname(self.video_path), f'{self.vd_name}_no_sub.mp4')
-        self.video_inpaint = VideoInpaint(config.MAX_PROCESS_NUM)
+        self.video_inpaint = None
         self.ext = os.path.splitext(vd_path)[-1]
         if self.is_picture:
             pic_dir = os.path.join(os.path.dirname(self.video_path), 'no_sub')
@@ -507,6 +507,7 @@ class SubtitleRemover:
             if config.ACCURATE_MODE:
                 # *********************** 批推理方案 start ***********************
                 print('use accurate mode')
+                self.video_inpaint = VideoInpaint(config.MAX_PROCESS_NUM)
                 index = 0
                 while True:
                     ret, frame = self.video_cap.read()
