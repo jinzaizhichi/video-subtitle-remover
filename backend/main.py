@@ -1,17 +1,14 @@
 import shutil
 import subprocess
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import threading
 import cv2
 import sys
-
-from backend.inpaint.video_inpaint import VideoInpaint
-from backend.tools.inpaint_tools import create_mask, inpaint, batch_generator
-
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from backend.inpaint.video_inpaint import VideoInpaint
+from backend.tools.inpaint_tools import create_mask, inpaint, batch_generator
 import config
 import importlib
 import platform
