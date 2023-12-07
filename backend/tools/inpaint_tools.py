@@ -106,14 +106,6 @@ def inpaint_video(video_path, sub_list):
 
 if __name__ == '__main__':
     multiprocessing.set_start_method("spawn")
-    from d import d
-
-    sub_list = d
-    inpaint_video('/home/yao/Documents/Project/video-subtitle-remover/test/test.mp4', sub_list)
-
-    # if len(frame_to_inpaint_list) >= config.MAX_INPAINT_NUM:
-    #     index_inpainted_frames =
-    # if len(index_inpainted_frames) > 0:
-    #     for index, inpainted_frame in index_inpainted_frames:
-    #         print(f'inpainted_index: {index}')
-    #         cv2.imwrite(f"/home/yao/Documents/Project/video-subtitle-remover/test/temp/{index}.png", inpainted_frame)
+    sub_list = None
+    video_path = ''
+    inpaint_video(video_path, sub_list)
