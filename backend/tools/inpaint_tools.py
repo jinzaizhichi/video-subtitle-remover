@@ -59,7 +59,7 @@ def parallel_inference(inputs, batch_size=None, pool_size=None):
 
 
 def inpaint(img, mask):
-    img_inpainted = lamaInpInpaintApp.inpaint_img_with_lama(img, mask)
+    img_inpainted = lamaInpInpaintApp(img, mask)
     return img_inpainted
 
 

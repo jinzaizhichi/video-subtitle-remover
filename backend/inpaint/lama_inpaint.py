@@ -14,8 +14,7 @@ os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ['MKL_NUM_THREADS'] = '1'
 os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
 os.environ['NUMEXPR_NUM_THREADS'] = '1'
-
-
+# pad_tensor_to_modulo 和 move_to_device 是可以支持torch.Tensor操作的函数
 from backend.inpaint.lama.saicinpainting.evaluation.utils import move_to_device
 from backend.inpaint.lama.saicinpainting.training.trainers import load_checkpoint
 from backend.inpaint.lama.saicinpainting.evaluation.data import pad_tensor_to_modulo
@@ -53,32 +52,47 @@ class LamaInpInpaint:
         return model
 
     @torch.no_grad()
-    def inpaint_img_with_lama(self, img: np.ndarray, mask: np.ndarray, mod=8):
+    def __call__(self, img: np.ndarray, mask: np.ndarray, mod=8):
+        img, mask = self.preprocess(img, mask)
+        batch = self.forward(img, mask)
+        cur_res = self.postprocess(batch)
+        return cur_res
+
+    @staticmethod
+    def preprocess(img: np.ndarray, mask: np.ndarray):
         assert len(mask.shape) == 2
         if np.max(mask) == 1:
             mask = mask * 255
-        with self.lock:
-            img = torch.from_numpy(img).float().div(255.)
-            mask = torch.from_numpy(mask).float()
-            batch = dict()
-            batch['image'] = img.permute(2, 0, 1).unsqueeze(0)
-            batch['mask'] = mask[None, None]
-            unpad_to_size = [batch['image'].shape[2], batch['image'].shape[3]]
-            batch['image'] = pad_tensor_to_modulo(batch['image'], mod)
-            batch['mask'] = pad_tensor_to_modulo(batch['mask'], mod)
-            batch = move_to_device(batch, self.device)
-            batch['mask'] = (batch['mask'] > 0) * 1
-            batch = self.model(batch)
-            cur_res = batch["inpainted"][0].permute(1, 2, 0)
-            cur_res = cur_res.detach().cpu().numpy()
-            if unpad_to_size is not None:
-                orig_height, orig_width = unpad_to_size
-                cur_res = cur_res[:orig_height, :orig_width]
-            cur_res = np.clip(cur_res * 255, 0, 255).astype('uint8')
-            return cur_res
+        img = torch.from_numpy(img).float().div(255.)
+        mask = torch.from_numpy(mask).float()
+        return img, mask
+
+    @staticmethod
+    def postprocess(batch):
+        cur_res = batch["inpainted"][0].permute(1, 2, 0)
+        cur_res = cur_res.detach().cpu().numpy()
+        unpad_to_size = [batch['image'].shape[2], batch['image'].shape[3]]
+        if unpad_to_size is not None:
+            orig_height, orig_width = unpad_to_size
+            cur_res = cur_res[:orig_height, :orig_width]
+        cur_res = np.clip(cur_res * 255, 0, 255).astype('uint8')
+        return cur_res
+
+    def forward(self, img: torch.Tensor, mask: torch.Tensor):
+        mod = 8
+        batch = dict()
+        batch['image'] = img.permute(2, 0, 1).unsqueeze(0)
+        batch['mask'] = mask[None, None]
+        batch['image'] = pad_tensor_to_modulo(batch['image'], mod)
+        batch['mask'] = pad_tensor_to_modulo(batch['mask'], mod)
+        batch = move_to_device(batch, self.device)
+        batch['mask'] = (batch['mask'] > 0) * 1
+        batch = self.model(batch)
+        return batch
 
 
 lamaInpInpaintApp = LamaInpInpaint(config.LAMA_CONFIG, config.LAMA_MODEL_PATH, config.device)
+
 
 if __name__ == '__main__':
     pass
