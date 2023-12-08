@@ -106,6 +106,3 @@ def inpaint_video(video_path, sub_list):
 
 if __name__ == '__main__':
     multiprocessing.set_start_method("spawn")
-    sub_list = None
-    video_path = ''
-    inpaint_video(video_path, sub_list)

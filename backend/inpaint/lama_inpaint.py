@@ -1,7 +1,6 @@
 import os
 import threading
 
-import cv2
 import numpy as np
 import torch
 import yaml
@@ -20,8 +19,10 @@ from backend.inpaint.lama.saicinpainting.training.trainers import load_checkpoin
 from backend.inpaint.lama.saicinpainting.evaluation.data import pad_tensor_to_modulo
 
 
-class LamaInpInpaint:
-    def __init__(self, config_p: str, ckpt_p: str, device=config.device):
+class LamaInpaint(torch.nn.Module):
+    def __init__(self, config_p=config.LAMA_CONFIG, ckpt_p=config.LAMA_MODEL_PATH, device=config.device, *args,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
         self.config_p = config_p
         self.ckpt_p = ckpt_p
         self.device = device
@@ -52,7 +53,7 @@ class LamaInpInpaint:
         return model
 
     @torch.no_grad()
-    def __call__(self, img: np.ndarray, mask: np.ndarray, mod=8):
+    def __call__(self, img: np.ndarray, mask: np.ndarray):
         img, mask = self.preprocess(img, mask)
         batch = self.forward(img, mask)
         cur_res = self.postprocess(batch)
@@ -91,8 +92,7 @@ class LamaInpInpaint:
         return batch
 
 
-lamaInpInpaintApp = LamaInpInpaint(config.LAMA_CONFIG, config.LAMA_MODEL_PATH, config.device)
-
+lamaInpInpaintApp = LamaInpaint()
 
 if __name__ == '__main__':
     pass

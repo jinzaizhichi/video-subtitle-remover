@@ -5,10 +5,13 @@ from pathlib import Path
 import threading
 import cv2
 import sys
+
+from backend.inpaint.lama_inpaint import LamaInpaint
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend.inpaint.video_inpaint import VideoInpaint
-from backend.tools.inpaint_tools import create_mask, inpaint, batch_generator
+from backend.tools.inpaint_tools import create_mask, batch_generator
 import config
 import importlib
 import platform
@@ -415,6 +418,7 @@ class SubtitleRemover:
                                             self.size)
         self.video_out_name = os.path.join(os.path.dirname(self.video_path), f'{self.vd_name}_no_sub.mp4')
         self.video_inpaint = None
+        self.lama_inpaint = None
         self.ext = os.path.splitext(vd_path)[-1]
         if self.is_picture:
             pic_dir = os.path.join(os.path.dirname(self.video_path), 'no_sub')
@@ -496,9 +500,10 @@ class SubtitleRemover:
         print('[Processing] start removing subtitles...')
 
         if self.is_picture:
+            self.lama_inpaint = LamaInpaint()
             original_frame = cv2.imread(self.video_path)
             mask = create_mask(original_frame.shape[0:2], sub_list[1])
-            frame = inpaint(original_frame, mask)
+            frame = self.lama_inpaint(original_frame, mask)
             cv2.imencode(self.ext, frame)[1].tofile(self.video_out_name)
             self.preview_frame = cv2.hconcat([original_frame, frame])
             tbar.update(1)
@@ -552,7 +557,9 @@ class SubtitleRemover:
                                 elif len(temp_frames) == 1:
                                     inner_index += 1
                                     single_mask = create_mask(self.mask_size, sub_list[index])
-                                    inpainted_frame = inpaint(frame, single_mask)
+                                    if self.lama_inpaint is None:
+                                        self.lama_inpaint = LamaInpaint()
+                                    inpainted_frame = self.lama_inpaint(frame, single_mask)
                                     self.video_writer.write(inpainted_frame)
                                     print(f'write frame: {start_frame_no + inner_index} with mask {sub_list[start_frame_no]}')
                                     self.update_progress(tbar, increment=1)
@@ -565,7 +572,9 @@ class SubtitleRemover:
                                         # 2. 调用批推理
                                         if len(batch) == 1:
                                             single_mask = create_mask(self.mask_size, sub_list[start_frame_no])
-                                            inpainted_frame = inpaint(frame, single_mask)
+                                            if self.lama_inpaint is None:
+                                                self.lama_inpaint = LamaInpaint()
+                                            inpainted_frame = self.lama_inpaint(frame, single_mask)
                                             self.video_writer.write(inpainted_frame)
                                             print(f'write frame: {start_frame_no + inner_index} with mask {sub_list[start_frame_no]}')
                                             inner_index += 1
@@ -582,6 +591,8 @@ class SubtitleRemover:
             else:
                 # *********************** 单线程方案 start ***********************
                 print('use normal mode')
+                if self.lama_inpaint is None:
+                    self.lama_inpaint = LamaInpaint()
                 index = 0
                 while True:
                     ret, frame = self.video_cap.read()
@@ -594,7 +605,7 @@ class SubtitleRemover:
                         if config.FAST_MODE:
                             frame = cv2.inpaint(frame, mask, 3, cv2.INPAINT_TELEA)
                         else:
-                            frame = inpaint(frame, mask)
+                            frame = self.lama_inpaint(frame, mask)
                     self.preview_frame = cv2.hconcat([original_frame, frame])
                     if self.is_picture:
                         cv2.imencode(self.ext, frame)[1].tofile(self.video_out_name)
